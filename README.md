@@ -77,3 +77,4 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 - [ ] Add an index to the storage to speed up the search and allow for
       more complex operations, like removing files reflecting the changes in
       the original locations
+- [ ] Split cmd and lib in two different packages
