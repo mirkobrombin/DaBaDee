@@ -51,18 +51,19 @@ the file to the storage.
 package main
 
 import (
-    "github.com/mirkobrombin/dabadee"
+	"github.com/mirkobrombin/dabadee/pkg/dabadee"
+	"github.com/mirkobrombin/dabadee/pkg/hash"
+	"github.com/mirkobrombin/dabadee/pkg/processor"
+	"github.com/mirkobrombin/dabadee/pkg/storage"
 )
 
 func main() {
-    // Deduplicate a folder
-    err := dabadee.Dedup("/path/to/folder", "/path/to/storage", 2, false)
-    if err != nil {
-        panic(err)
-    }
+    s := storage.NewStorage("/path/to/storage")
+	h := hash.NewSHA256Generator()
+    p := processor.NewDedupProcessor("/path/to/folder", s, h, 2, true)
 
-    // Deduplicate a file on copy
-    err = dabadee.Cp("/path/to/file", "/path/to/dest/file", "/path/to/storage", false)
+    d := dabadee.NewDaBaDee(p)
+    err := d.Run()
     if err != nil {
         panic(err)
     }
