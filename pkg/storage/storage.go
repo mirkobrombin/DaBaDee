@@ -32,14 +32,24 @@ func NewStorage(opts StorageOptions) (storage *Storage, err error) {
 	_, err = os.Stat(opts.Root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Create storage directory
+			// Storage directory does not exist, so create it
 			err = os.MkdirAll(opts.Root, 0755)
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			return nil, err
+		}
+	}
 
-			// The .dabadee file is used to store the storage options
-			optsFile, err := os.Create(filepath.Join(opts.Root, ".dabadee"))
+	configFilePath := filepath.Join(opts.Root, ".dabadee")
+
+	// Check if the config file exists
+	_, err = os.Stat(configFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No config file found, so create it
+			optsFile, err := os.Create(configFilePath)
 			if err != nil {
 				return nil, err
 			}
@@ -58,7 +68,7 @@ func NewStorage(opts StorageOptions) (storage *Storage, err error) {
 			return nil, err
 		}
 	} else {
-		// Load existing config
+		// Config file found, so load it
 		opts, err = loadConfig(opts.Root)
 		if err != nil {
 			return nil, err
@@ -66,7 +76,6 @@ func NewStorage(opts StorageOptions) (storage *Storage, err error) {
 	}
 
 	storage = &Storage{Opts: opts}
-
 	return storage, nil
 }
 
@@ -292,7 +301,7 @@ func (s *Storage) findStoredPath(path string) (string, error) {
 // RemoveOrphans removes all files that are not linked to any other file
 func (s *Storage) RemoveOrphans() error {
 	// Get all files in the storage
-	files, err := os.ReadDir(s.Opts.Root)
+	files, err := s.ListFiles()
 	if err != nil {
 		return err
 	}
@@ -338,4 +347,21 @@ func (s *Storage) RemoveOrphans() error {
 	}
 
 	return nil
+}
+
+// ListFiles returns the list of files in the storage
+func (s *Storage) ListFiles() ([]os.DirEntry, error) {
+	dir, err := os.ReadDir(s.Opts.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	var files []os.DirEntry
+	for _, file := range dir {
+		if file.Name() != ".dabadee" {
+			files = append(files, file)
+		}
+	}
+
+	return files, nil
 }
