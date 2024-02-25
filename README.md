@@ -58,7 +58,7 @@ import (
 )
 
 func main() {
-    s := storage.NewStorage("/path/to/storage")
+    s := storage.NewStorage(storage.StorageOptions{Root: "/path/to/storage"})
     h := hash.NewSHA256Generator()
     p := processor.NewDedupProcessor("/path/to/folder", s, h, 2, true)
 
