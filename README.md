@@ -1,8 +1,9 @@
-# DaBaDee
-
-DaBaDee is a simple deduplication tool/storage for files. It uses SHA256 to
+<div align="center">
+    <img src="logo.png" alt="DaBaDee" width="450"/>
+    <p>DaBaDee is a simple deduplication tool/storage for files. It uses SHA256 to
 hash the files and store them in the storage, replacing the original path with
-a hardlink to the storage location.
+a hardlink to the storage location.</p>
+</div>
 
 ## Usage
 
