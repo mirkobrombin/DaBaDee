@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -9,7 +10,49 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 )
+
+var globalLock sync.Mutex
+var processing = make(map[string]bool)
+var doneProcessing = make(map[string]chan struct{})
+
+// startProcessing marks the given hash as processing and returns a channel to
+// wait on if the hash is already being processed
+func startProcessing(hash string) (alreadyProcessing bool, waitChan chan struct{}) {
+	globalLock.Lock()
+	defer globalLock.Unlock()
+
+	if processing[hash] {
+		// If the hash is already being processed, return true and the channel
+		// to wait on
+		if ch, exists := doneProcessing[hash]; exists {
+			return true, ch
+		}
+
+		doneProcessing[hash] = make(chan struct{})
+		return true, doneProcessing[hash]
+	}
+
+	// Mark the hash as processing and proceed.
+	processing[hash] = true
+	doneProcessing[hash] = make(chan struct{})
+	return false, nil
+}
+
+// finishProcessing marks the given hash as no longer processing and closes the
+// channel to signal that the processing has finished
+func finishProcessing(hash string) {
+	globalLock.Lock()
+	defer globalLock.Unlock()
+
+	// Mark the hash as no longer processing
+	processing[hash] = false
+	if ch, exists := doneProcessing[hash]; exists {
+		close(ch)
+		delete(doneProcessing, hash)
+	}
+}
 
 // Job represents a file to be processed
 type Job struct {
@@ -36,60 +79,94 @@ func computeFileHash(path string) (string, error) {
 	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
+// computeMetadataHash returns the SHA256 hash of the file metadata (only
+// owner, group and mode are considered)
+func computeMetadataHash(info os.FileInfo) string {
+	sys := info.Sys().(*syscall.Stat_t)
+	metadata := fmt.Sprintf("%d-%d-%d", sys.Uid, sys.Gid, info.Mode())
+	hash := sha256.New()
+	hash.Write([]byte(metadata))
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
 // handleFile processes the file at the given path
-func handleFile(job Job, storagePath string) error {
-	hashSum, err := computeFileHash(job.Path)
+func handleFile(job Job, storagePath string, withMetadata bool) error {
+	contentHash, err := computeFileHash(job.Path)
 	if err != nil {
 		return fmt.Errorf("computing file hash: %w", err)
 	}
 
-	dedupPath := filepath.Join(storagePath, hashSum)
-
-	// If the file is not already in the storage, move it there, otherwise
-	// remove the duplicate
-	if _, err := os.Stat(dedupPath); os.IsNotExist(err) {
-		if err := os.Rename(job.Path, dedupPath); err != nil {
-			return fmt.Errorf("moving file to storage: %w", err)
-		}
-	} else if err := os.Remove(job.Path); err != nil {
-		return fmt.Errorf("removing duplicate file: %w", err)
+	var finalHash string
+	if withMetadata {
+		metadataHash := computeMetadataHash(job.Info)
+		finalHash = contentHash + "-" + metadataHash
+	} else {
+		finalHash = contentHash
 	}
 
-	// Create a link to the deduplicated file in the source directory to
-	// make it accessible from the original path
+	// Check if the file is already being processed and wait for it to finish
+	alreadyProcessing, waitChan := startProcessing(finalHash)
+	if alreadyProcessing {
+		<-waitChan
+	}
+
+	dedupPath := filepath.Join(storagePath, finalHash)
+
+	if _, err := os.Stat(dedupPath); os.IsNotExist(err) {
+		if err := os.Rename(job.Path, dedupPath); err != nil {
+			finishProcessing(finalHash)
+			return fmt.Errorf("moving file to storage: %w", err)
+		}
+	} else {
+		if err := os.Remove(job.Path); err != nil {
+			finishProcessing(finalHash)
+			return fmt.Errorf("removing duplicate file: %w", err)
+		}
+	}
+
 	if _, err := os.Lstat(job.Path); os.IsNotExist(err) {
 		if err := os.Link(dedupPath, job.Path); err != nil {
+			finishProcessing(finalHash)
 			return fmt.Errorf("creating link: %w", err)
 		}
 	}
 
+	finishProcessing(finalHash)
 	return nil
 }
 
 // Dedup walks the source directory and deduplicates files in the storage
 // directory using the given number of workers
-func Dedup(source, storagePath string, workers int) error {
+func Dedup(source, storagePath string, workers int, withMetadata bool) error {
 	if err := os.MkdirAll(storagePath, os.ModePerm); err != nil {
 		return fmt.Errorf("creating storage directory: %w", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(storagePath, ".metadata_mode")); os.IsNotExist(err) {
+		modeFlag := []byte("without-metadata")
+		if withMetadata {
+			modeFlag = []byte("with-metadata")
+		}
+		if err := os.WriteFile(filepath.Join(storagePath, ".metadata_mode"), modeFlag, 0644); err != nil {
+			return fmt.Errorf("writing metadata mode flag: %w", err)
+		}
 	}
 
 	jobs := make(chan Job, workers)
 	var wg sync.WaitGroup
 
-	// Start the workers
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				if err := handleFile(job, storagePath); err != nil {
+				if err := handleFile(job, storagePath, withMetadata); err != nil {
 					log.Println(err)
 				}
 			}
 		}()
 	}
 
-	// Walk the source directory and send the files to the workers
 	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -107,22 +184,28 @@ func Dedup(source, storagePath string, workers int) error {
 
 // Cp copies the file from source to dest and deduplicates it in the storage
 // if not already present
-func Cp(source, dest, storagePath string) error {
+func Cp(source, dest, storagePath string, withMetadata bool) error {
 	if err := os.MkdirAll(storagePath, os.ModePerm); err != nil {
 		return fmt.Errorf("creating storage directory: %w", err)
 	}
 
-	job := Job{Path: source}
-	if err := handleFile(job, storagePath); err != nil {
+	info, err := os.Stat(source)
+	if err != nil {
+		return fmt.Errorf("getting source file info: %w", err)
+	}
+
+	job := Job{Path: source, Info: info}
+	if err := handleFile(job, storagePath, withMetadata); err != nil {
 		return fmt.Errorf("handling file: %w", err)
 	}
 
-	hashSum, err := computeFileHash(source)
-	if err != nil {
-		return fmt.Errorf("computing hash: %w", err)
+	contentHash, _ := computeFileHash(source)
+	metadataHash := ""
+	if withMetadata {
+		metadataHash = computeMetadataHash(info)
 	}
+	dedupPath := filepath.Join(storagePath, contentHash+"-"+metadataHash)
 
-	dedupPath := filepath.Join(storagePath, hashSum)
 	if err := os.Link(dedupPath, dest); err != nil {
 		return fmt.Errorf("creating link: %w", err)
 	}
@@ -132,8 +215,8 @@ func Cp(source, dest, storagePath string) error {
 
 func main() {
 	usage := `Usage:
-dabadee dedup <source> <storage> <workers>
-dabadee cp <source> <dest> <storage>
+dabadee dedup <source> <storage> <workers> [--with-metadata]
+dabadee cp <source> <dest> <storage> [--with-metadata]
 dabadee --help`
 
 	if len(os.Args) < 2 {
@@ -141,25 +224,30 @@ dabadee --help`
 		os.Exit(1)
 	}
 
+	withMetadata := false
+	if len(os.Args) > 4 && os.Args[len(os.Args)-1] == "--with-metadata" {
+		withMetadata = true
+	}
+
 	switch os.Args[1] {
 	case "cp":
-		if len(os.Args) != 5 {
-			fmt.Println("Usage: dabadee cp <source> <dest> <storage>")
+		if len(os.Args) < 5 || (withMetadata && len(os.Args) != 6) {
+			fmt.Println("Usage: dabadee cp <source> <dest> <storage> [--with-metadata]")
 			os.Exit(1)
 		}
-		if err := Cp(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+		if err := Cp(os.Args[2], os.Args[3], os.Args[4], withMetadata); err != nil {
 			log.Fatalf("Error during copy and link: %v", err)
 		}
 	case "dedup":
-		if len(os.Args) != 5 {
-			fmt.Println("Usage: dabadee dedup <source> <storage> <workers>")
+		if len(os.Args) < 4 || (withMetadata && len(os.Args) != 6) {
+			fmt.Println("Usage: dabadee dedup <source> <storage> <workers> [--with-metadata]")
 			os.Exit(1)
 		}
 		workers, err := strconv.Atoi(os.Args[4])
 		if err != nil {
 			log.Fatalf("Error converting workers to integer: %v", err)
 		}
-		if err := Dedup(os.Args[2], os.Args[3], workers); err != nil {
+		if err := Dedup(os.Args[2], os.Args[3], workers, withMetadata); err != nil {
 			log.Fatalf("Error during deduplication: %v", err)
 		}
 	default:

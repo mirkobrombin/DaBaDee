@@ -74,7 +74,5 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 - [ ] Add a logger
 - [ ] Add a progress bar
 - [ ] Make access to storage more robust, with a lock file
-- [ ] Add an index to the storage to speed up the search and allow for
-      more complex operations, like removing files reflecting the changes in
-      the original locations
+- [x] Provide an option to respect metadata (uid, gid, permissions)
 - [ ] Split cmd and lib in two different packages
