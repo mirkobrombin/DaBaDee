@@ -87,5 +87,7 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 - [ ] Add a logger
 - [ ] Add a progress bar
 - [ ] Make access to storage more robust, with a lock file
+- [ ] Add a way to remove files from the storage reflecting the changes in the
+      original files
 - [x] Provide an option to respect metadata (uid, gid, permissions)
 - [x] Split cmd and lib in two different packages
