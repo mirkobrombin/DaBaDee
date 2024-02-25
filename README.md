@@ -17,12 +17,14 @@ dabadee --help
 **Deduplicate a folder**
 
 ```sh
-dabadee dedup /path/to/folder /path/to/storage
+dabadee dedup /path/to/folder /path/to/storage 2
 ```
 
 Where the `/path/to/folder` is the folder to deduplicate and `/path/to/storage`
-is the location you want to store the deduplicated files. Do not delete the
-resulting storage folder, as it contains the original files.
+is the location you want to store the deduplicated files. The `2` is the number
+of workers to use to speed up the process.
+
+> Do not delete the resulting storage folder, as it contains the original files.
 
 **Deduplicate on copy**
 
@@ -32,6 +34,13 @@ dabadee cp /path/to/file /path/to/dest/file /path/to/storage
 
 This will copy the file to the destination and deduplicate it in the storage if
 not already present.
+
+**Keep metadata**
+
+```sh
+dabadee dedup /path/to/folder /path/to/storage 2 --with-metadata
+dabadee cp /path/to/file /path/to/dest/file /path/to/storage --with-metadata
+```
 
 ### Library
 
@@ -44,13 +53,13 @@ import (
 
 func main() {
     // Deduplicate a folder
-    err := dabadee.Dedup("/path/to/folder", "/path/to/storage")
+    err := dabadee.Dedup("/path/to/folder", "/path/to/storage", 2, false)
     if err != nil {
         panic(err)
     }
 
     // Deduplicate a file on copy
-    err = dabadee.Cp("/path/to/file", "/path/to/dest/file", "/path/to/storage")
+    err = dabadee.Cp("/path/to/file", "/path/to/dest/file", "/path/to/storage", false)
     if err != nil {
         panic(err)
     }
