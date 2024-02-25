@@ -42,6 +42,9 @@ dabadee dedup /path/to/folder /path/to/storage 2 --with-metadata
 dabadee cp /path/to/file /path/to/dest/file /path/to/storage --with-metadata
 ```
 
+This will keep the original file metadata (uid, gid, permissions) when copying
+the file to the storage.
+
 ### Library
 
 ```go
