@@ -59,7 +59,7 @@ import (
 
 func main() {
     s := storage.NewStorage("/path/to/storage")
-	h := hash.NewSHA256Generator()
+    h := hash.NewSHA256Generator()
     p := processor.NewDedupProcessor("/path/to/folder", s, h, 2, true)
 
     d := dabadee.NewDaBaDee(p)
