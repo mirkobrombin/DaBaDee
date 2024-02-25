@@ -17,6 +17,7 @@ func main() {
 	var rootCmd = &cobra.Command{Use: "dabadee"}
 
 	var withMetadata bool
+	var additionalPaths []string
 
 	var cpCmd = &cobra.Command{
 		Use:   "cp [source] [dest] [storage]",
@@ -34,7 +35,29 @@ func main() {
 	}
 	dedupCmd.Flags().BoolVarP(&withMetadata, "with-metadata", "m", false, "Include file metadata in hash calculation")
 
-	rootCmd.AddCommand(cpCmd, dedupCmd)
+	var findLinksCmd = &cobra.Command{
+		Use:   "find-links [source] [storage]",
+		Short: "Find all hard links to the specified file",
+		Args:  cobra.ExactArgs(2),
+		Run:   findLinksCommand,
+	}
+	findLinksCmd.Flags().StringSliceVarP(&additionalPaths, "additional-paths", "p", []string{}, "Additional paths to search for links")
+
+	var removeOrphansCmd = &cobra.Command{
+		Use:   "remove-orphans [storage]",
+		Short: "Remove all orphaned files from the storage",
+		Args:  cobra.ExactArgs(1),
+		Run:   removeOrphansCommand,
+	}
+
+	var rmCmd = &cobra.Command{
+		Use:   "rm [source] [storage]",
+		Short: "Remove a file and its link from storage",
+		Args:  cobra.ExactArgs(2),
+		Run:   removeCommand,
+	}
+
+	rootCmd.AddCommand(cpCmd, dedupCmd, findLinksCmd, removeOrphansCmd, rmCmd)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -45,7 +68,16 @@ func cpCommand(cmd *cobra.Command, args []string) {
 	source, dest, storagePath := args[0], args[1], args[2]
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
 
-	s := storage.NewStorage(storagePath)
+	storageOpts := storage.StorageOptions{
+		Root:         storagePath,
+		WithMetadata: withMetadata,
+	}
+
+	s, err := storage.NewStorage(storageOpts)
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
+
 	h := hash.NewSHA256Generator()
 	processor := processor.NewCpProcessor(source, dest, s, h, withMetadata)
 	d := dabadee.NewDaBaDee(processor)
@@ -63,11 +95,68 @@ func dedupCommand(cmd *cobra.Command, args []string) {
 
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
 
-	s := storage.NewStorage(storagePath)
+	storageOpts := storage.StorageOptions{
+		Root:         storagePath,
+		WithMetadata: withMetadata,
+	}
+
+	s, err := storage.NewStorage(storageOpts)
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
+
 	h := hash.NewSHA256Generator()
 	processor := processor.NewDedupProcessor(source, s, h, workers, withMetadata)
 	d := dabadee.NewDaBaDee(processor)
 	if err := d.Run(); err != nil {
 		log.Fatalf("Error during deduplication: %v", err)
+	}
+}
+
+func findLinksCommand(cmd *cobra.Command, args []string) {
+	path, storagePath := args[0], args[1]
+
+	additionalPaths, _ := cmd.Flags().GetStringSlice("additional-paths")
+
+	s, err := storage.NewStorage(storage.StorageOptions{Root: storagePath})
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
+
+	links, err := s.FindLinks(path, additionalPaths)
+	if err != nil {
+		log.Fatalf("Error finding links: %v", err)
+	}
+
+	for _, link := range links {
+		fmt.Println(link)
+	}
+}
+
+func removeOrphansCommand(cmd *cobra.Command, args []string) {
+	storagePath := args[0]
+
+	s, err := storage.NewStorage(storage.StorageOptions{Root: storagePath})
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
+
+	err = s.RemoveOrphans()
+	if err != nil {
+		log.Fatalf("Error removing orphans: %v", err)
+	}
+}
+
+func removeCommand(cmd *cobra.Command, args []string) {
+	source, storagePath := args[0], args[1]
+
+	s, err := storage.NewStorage(storage.StorageOptions{Root: storagePath})
+	if err != nil {
+		log.Fatalf("Error creating storage: %v", err)
+	}
+
+	err = s.RemoveFile(source)
+	if err != nil {
+		log.Fatalf("Error removing file: %v", err)
 	}
 }

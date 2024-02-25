@@ -106,7 +106,7 @@ func (p *DedupProcessor) Process() error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && path != p.Storage.Path {
+		if !info.IsDir() && path != p.Storage.Opts.Root {
 			jobs <- path
 		}
 		return nil
@@ -143,7 +143,7 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	}
 
 	// Check if a file with the same hash already exists in storage
-	dedupPath := filepath.Join(p.Storage.Path, finalHash)
+	dedupPath := filepath.Join(p.Storage.Opts.Root, finalHash)
 	exists, err := p.Storage.FileExists(dedupPath)
 	if err != nil {
 		finishProcessing(finalHash)

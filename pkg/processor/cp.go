@@ -57,7 +57,7 @@ func (p *CpProcessor) Process() (err error) {
 		}
 	}
 
-	dedupPath := filepath.Join(p.Storage.Path, finalHash)
+	dedupPath := filepath.Join(p.Storage.Opts.Root, finalHash)
 
 	// Check if the deduplicated file already exists in storage
 	exists, err := p.Storage.FileExists(dedupPath)
