@@ -1,0 +1,179 @@
+package processor
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/mirkobrombin/dabadee/pkg/hash"
+	"github.com/mirkobrombin/dabadee/pkg/storage"
+)
+
+var (
+	globalLock     sync.Mutex
+	processing     = make(map[string]bool)
+	doneProcessing = make(map[string]chan struct{})
+)
+
+// DedupProcessor is a processor that deduplicates files by moving them to a
+// storage and creating a link to the original location
+type DedupProcessor struct {
+	// Source is the path of the directory to deduplicate
+	Source string
+
+	// Storage is the storage interface to use
+	Storage *storage.Storage
+
+	// HashGen is the hash generator to use
+	HashGen hash.Generator
+
+	// Workers is the number of workers to use
+	Workers int
+
+	// WithMetadata is a flag to enable metadata hashing
+	WithMetadata bool
+}
+
+// NewDedupProcessor creates a new DedupProcessor
+func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Generator, workers int, withMetadata bool) *DedupProcessor {
+	return &DedupProcessor{
+		Source:       source,
+		Storage:      storage,
+		HashGen:      hashGen,
+		Workers:      workers,
+		WithMetadata: withMetadata,
+	}
+}
+
+// startProcessing marks the given hash as processing and returns a channel to
+// wait on if the hash is already being processed
+func startProcessing(hash string) (alreadyProcessing bool, waitChan chan struct{}) {
+	globalLock.Lock()
+	defer globalLock.Unlock()
+
+	if processing[hash] {
+		// If the hash is already being processed, return the channel to wait on
+		if ch, exists := doneProcessing[hash]; exists {
+			return true, ch
+		}
+
+		doneProcessing[hash] = make(chan struct{})
+		return true, doneProcessing[hash]
+	}
+
+	// Mark the hash as processing and proceed
+	processing[hash] = true
+	doneProcessing[hash] = make(chan struct{})
+	return false, nil
+}
+
+// finishProcessing marks the given hash as no longer processing and closes the
+// channel to signal that the processing has finished
+func finishProcessing(hash string) {
+	globalLock.Lock()
+	defer globalLock.Unlock()
+
+	processing[hash] = false
+	if ch, exists := doneProcessing[hash]; exists {
+		close(ch)
+		delete(doneProcessing, hash)
+	}
+}
+
+// Process processes the files in the source directory
+func (p *DedupProcessor) Process() error {
+	jobs := make(chan string, p.Workers)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for i := 0; i < p.Workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				err := p.processFile(path)
+				if err != nil {
+					log.Printf("Error processing file %s: %v", path, err)
+				}
+			}
+		}()
+	}
+
+	// Walk the source directory to enqueue jobs
+	err := filepath.Walk(p.Source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && path != p.Storage.Path {
+			jobs <- path
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	close(jobs)
+	wg.Wait()
+
+	return nil
+}
+
+func (p *DedupProcessor) processFile(path string) (err error) {
+	// Compute file hash
+	var finalHash string
+
+	if p.WithMetadata {
+		finalHash, err = p.HashGen.ComputeFullHash(path)
+		if err != nil {
+			return fmt.Errorf("computing full hash: %w", err)
+		}
+	} else {
+		finalHash, err = p.HashGen.ComputeFileHash(path)
+		if err != nil {
+			return fmt.Errorf("computing content hash: %w", err)
+		}
+	}
+
+	// Check if the file is already being processed
+	alreadyProcessing, waitChan := startProcessing(finalHash)
+	if alreadyProcessing {
+		<-waitChan // Wait for the processing to finish
+	}
+
+	// Check if a file with the same hash already exists in storage
+	dedupPath := filepath.Join(p.Storage.Path, finalHash)
+	exists, err := p.Storage.FileExists(dedupPath)
+	if err != nil {
+		finishProcessing(finalHash)
+		return fmt.Errorf("checking file existence in storage: %w", err)
+	}
+
+	if !exists {
+		// If the file does not exist in storage, move it there
+		err = p.Storage.MoveFileToStorage(path, finalHash)
+		if err != nil {
+			finishProcessing(finalHash)
+			return fmt.Errorf("moving file to storage: %w", err)
+		}
+	} else {
+		// If the file already exists in storage, remove the source file
+		err = os.Remove(path)
+		if err != nil {
+			finishProcessing(finalHash)
+			return fmt.Errorf("removing source file: %w", err)
+		}
+	}
+
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		err = os.Link(dedupPath, path)
+		if err != nil {
+			finishProcessing(finalHash)
+			return fmt.Errorf("creating link to deduplicated file: %w", err)
+		}
+	}
+
+	finishProcessing(finalHash)
+	return nil
+}

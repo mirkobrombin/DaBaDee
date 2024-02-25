@@ -87,4 +87,4 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 - [ ] Add a progress bar
 - [ ] Make access to storage more robust, with a lock file
 - [x] Provide an option to respect metadata (uid, gid, permissions)
-- [ ] Split cmd and lib in two different packages
+- [x] Split cmd and lib in two different packages
