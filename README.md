@@ -51,10 +51,10 @@ the file to the storage.
 package main
 
 import (
-	"github.com/mirkobrombin/dabadee/pkg/dabadee"
-	"github.com/mirkobrombin/dabadee/pkg/hash"
-	"github.com/mirkobrombin/dabadee/pkg/processor"
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+    "github.com/mirkobrombin/dabadee/pkg/dabadee"
+    "github.com/mirkobrombin/dabadee/pkg/hash"
+    "github.com/mirkobrombin/dabadee/pkg/processor"
+    "github.com/mirkobrombin/dabadee/pkg/storage"
 )
 
 func main() {
