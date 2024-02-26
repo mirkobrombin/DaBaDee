@@ -13,6 +13,23 @@ a hardlink to the storage location.</p>
 
 ```sh
 dabadee --help
+
+Usage:
+  dabadee [command]
+
+Available Commands:
+  completion     Generate the autocompletion script for the specified shell
+  cp             Copy a file and deduplicate it in storage
+  dedup          Deduplicate files in a directory
+  find-links     Find all hard links to the specified file
+  help           Help about any command
+  remove-orphans Remove all orphaned files from the storage
+  rm             Remove a file and its link from storage
+
+Flags:
+  -h, --help   help for dabadee
+
+Use "dabadee [command] --help" for more information about a command.
 ```
 
 **Deduplicate a folder**
