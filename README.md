@@ -103,7 +103,7 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 
 - [x] Add tests
 - [ ] Add a progress bar
-- [ ] Provide better logs and ask user input when needed
+- [x] Provide better logs and ask user input when needed
 - [ ] Make access to storage more robust, with a lock file
 - [x] Add a way to remove files from the storage reflecting the changes in the
       original files
