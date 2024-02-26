@@ -1,6 +1,6 @@
 module github.com/mirkobrombin/dabadee
 
-go 1.21.6
+go 1.21
 
 require (
 	github.com/minio/highwayhash v1.0.2
