@@ -119,6 +119,12 @@ func (s *Storage) MoveFileToStorage(sourcePath, destHash string) error {
 		return err
 	}
 
+	// link the file to the source path
+	err = os.Link(destPath, sourcePath)
+	if err != nil {
+		return err
+	}
+
 	// store the parent path of the file
 	parentPath := filepath.Dir(sourcePath)
 	err = s.storeNewPath(parentPath)
