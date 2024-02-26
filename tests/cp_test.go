@@ -64,11 +64,6 @@ func TestCpCommand(t *testing.T) {
 
 	// Check if they have same inode
 	fileInfo1, err := os.Lstat(filepath.Join(testPath, "file-0"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatalf("File not found: %v", err)
-		}
-	}
 	assert.Nil(t, err)
 	fileInfo2, err := os.Lstat(filepath.Join(testPath, "file-0-link"))
 	assert.Nil(t, err)
