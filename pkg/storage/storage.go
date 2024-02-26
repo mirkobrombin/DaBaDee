@@ -97,8 +97,24 @@ func loadConfig(root string) (StorageOptions, error) {
 
 // MoveFileToStorage moves the file from the source path to the storage
 func (s *Storage) MoveFileToStorage(sourcePath, destHash string) error {
+	// skip if the file is already in the storage
+	if s.isStoredPath(sourcePath) {
+		return nil
+	}
+
+	// ignore symlinks
+	info, err := os.Lstat(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+
+	// move the file to the storage
 	destPath := filepath.Join(s.Opts.Root, destHash)
-	err := os.Rename(sourcePath, destPath)
+	err = os.Rename(sourcePath, destPath)
 	if err != nil {
 		return err
 	}
