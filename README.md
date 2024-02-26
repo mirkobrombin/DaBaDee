@@ -1,8 +1,11 @@
 <div align="center">
     <img src="logo.png" alt="DaBaDee" width="450"/>
-    <p>DaBaDee is a simple deduplication tool/storage for files. It uses SHA256 to
+    <p>DaBaDee is a simple deduplication tool/storage for files. It uses SHA256* to
 hash the files and store them in the storage, replacing the original path with
 a hardlink to the storage location.</p>
+    <sub>* SHA256 is the default hashing algorithm, but it can be replaced with
+    any other hashing algorithm that implements the `hash.Generator` interface.
+    The highwayhash algorithm is also provided as an example.</sub>
 </div>
 
 ## Usage
