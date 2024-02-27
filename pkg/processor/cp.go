@@ -37,7 +37,7 @@ func NewCpProcessor(sourceFile, destFile string, storage *storage.Storage, hashG
 }
 
 // Process processes the file and creates a link at the destination
-func (p *CpProcessor) Process() (err error) {
+func (p *CpProcessor) Process(verbose bool) (err error) {
 	// Compute file hash
 	var finalHash string
 

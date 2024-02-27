@@ -19,6 +19,7 @@ func NewCpCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("with-metadata", "m", false, "Include file metadata in hash calculation")
+	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 
 	return cmd
 }
@@ -26,6 +27,7 @@ func NewCpCommand() *cobra.Command {
 func cpCommand(cmd *cobra.Command, args []string) {
 	source, dest, storagePath := args[0], args[1], args[2]
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	// Create storage
 	storageOpts := storage.StorageOptions{
@@ -45,7 +47,7 @@ func cpCommand(cmd *cobra.Command, args []string) {
 
 	// Run the processor
 	log.Printf("Copying %s to %s..", source, dest)
-	d := dabadee.NewDaBaDee(processor)
+	d := dabadee.NewDaBaDee(processor, verbose)
 	if err := d.Run(); err != nil {
 		log.Fatalf("Error during copy and link: %v", err)
 	}

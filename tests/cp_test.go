@@ -49,7 +49,7 @@ func TestCpCommand(t *testing.T) {
 		h,
 	)
 
-	d := dabadee.NewDaBaDee(cpProcessor)
+	d := dabadee.NewDaBaDee(cpProcessor, true)
 
 	// Run the command
 	err = d.Run()

@@ -79,7 +79,7 @@ func finishProcessing(hash string) {
 }
 
 // Process processes the files in the source directory
-func (p *DedupProcessor) Process() error {
+func (p *DedupProcessor) Process(verbose bool) error {
 	jobs := make(chan string, p.Workers)
 	var wg sync.WaitGroup
 
@@ -91,7 +91,9 @@ func (p *DedupProcessor) Process() error {
 			for path := range jobs {
 				err := p.processFile(path)
 				if err != nil {
-					log.Printf("Error processing file %s: %v", path, err)
+					if verbose {
+						log.Printf("Error processing file %s: %v", path, err)
+					}
 				}
 			}
 		}()

@@ -53,7 +53,7 @@ func TestDedupCommand(t *testing.T) {
 
 	processor := processor.NewDedupProcessor(testPath, s, h, 1)
 
-	d := dabadee.NewDaBaDee(processor)
+	d := dabadee.NewDaBaDee(processor, true)
 
 	// Run the deduplication
 	err = d.Run()

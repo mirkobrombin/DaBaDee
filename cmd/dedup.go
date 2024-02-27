@@ -20,6 +20,7 @@ func NewDedupCommand() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("with-metadata", "m", false, "Include file metadata in hash calculation")
+	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 
 	return cmd
 }
@@ -27,6 +28,7 @@ func NewDedupCommand() *cobra.Command {
 func dedupCommand(cmd *cobra.Command, args []string) {
 	source, storagePath, workersStr := args[0], args[1], args[2]
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 	workers, err := strconv.Atoi(workersStr)
 	if err != nil {
 		log.Fatalf("Invalid number of workers: %v", err)
@@ -50,7 +52,7 @@ func dedupCommand(cmd *cobra.Command, args []string) {
 
 	// Run the processor
 	log.Printf("Deduplicating %s..", source)
-	d := dabadee.NewDaBaDee(processor)
+	d := dabadee.NewDaBaDee(processor, verbose)
 	if err := d.Run(); err != nil {
 		log.Fatalf("Error during deduplication: %v", err)
 	}
