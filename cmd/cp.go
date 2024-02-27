@@ -41,7 +41,7 @@ func cpCommand(cmd *cobra.Command, args []string) {
 	h := hash.NewSHA256Generator()
 
 	// Create processor
-	processor := processor.NewCpProcessor(source, dest, s, h, withMetadata)
+	processor := processor.NewCpProcessor(source, dest, s, h)
 
 	// Run the processor
 	log.Printf("Copying %s to %s..", source, dest)

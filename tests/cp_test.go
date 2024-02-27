@@ -47,7 +47,6 @@ func TestCpCommand(t *testing.T) {
 		filepath.Join(testPath, "file-0-link"),
 		s,
 		h,
-		true,
 	)
 
 	d := dabadee.NewDaBaDee(cpProcessor)

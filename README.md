@@ -79,9 +79,12 @@ import (
 )
 
 func main() {
-    s := storage.NewStorage(storage.StorageOptions{Root: "/path/to/storage"})
+    s := storage.NewStorage(storage.StorageOptions{
+      Root: "/path/to/storage",
+      WithMetadata: true,
+    })
     h := hash.NewSHA256Generator()
-    p := processor.NewDedupProcessor("/path/to/folder", s, h, 2, true)
+    p := processor.NewDedupProcessor("/path/to/folder", s, h, 2)
 
     d := dabadee.NewDaBaDee(p)
     err := d.Run()

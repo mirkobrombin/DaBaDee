@@ -51,7 +51,7 @@ func TestDedupCommand(t *testing.T) {
 
 	h := hash.NewSHA256Generator()
 
-	processor := processor.NewDedupProcessor(testPath, s, h, 1, true)
+	processor := processor.NewDedupProcessor(testPath, s, h, 1)
 
 	d := dabadee.NewDaBaDee(processor)
 

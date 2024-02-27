@@ -24,19 +24,15 @@ type CpProcessor struct {
 
 	// HashGen is the hash generator to use
 	HashGen hash.Generator
-
-	// WithMetadata is a flag to enable metadata hashing
-	WithMetadata bool
 }
 
 // NewCpProcessor creates a new CpProcessor
-func NewCpProcessor(sourceFile, destFile string, storage *storage.Storage, hashGen hash.Generator, withMetadata bool) *CpProcessor {
+func NewCpProcessor(sourceFile, destFile string, storage *storage.Storage, hashGen hash.Generator) *CpProcessor {
 	return &CpProcessor{
-		SourceFile:   sourceFile,
-		DestFile:     destFile,
-		Storage:      storage,
-		HashGen:      hashGen,
-		WithMetadata: withMetadata,
+		SourceFile: sourceFile,
+		DestFile:   destFile,
+		Storage:    storage,
+		HashGen:    hashGen,
 	}
 }
 
@@ -45,7 +41,7 @@ func (p *CpProcessor) Process() (err error) {
 	// Compute file hash
 	var finalHash string
 
-	if p.WithMetadata {
+	if p.Storage.Opts.WithMetadata {
 		finalHash, err = p.HashGen.ComputeFullHash(p.SourceFile)
 		if err != nil {
 			return fmt.Errorf("computing full hash: %w", err)

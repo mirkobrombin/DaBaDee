@@ -46,7 +46,7 @@ func dedupCommand(cmd *cobra.Command, args []string) {
 	h := hash.NewSHA256Generator()
 
 	// Create processor
-	processor := processor.NewDedupProcessor(source, s, h, workers, withMetadata)
+	processor := processor.NewDedupProcessor(source, s, h, workers)
 
 	// Run the processor
 	log.Printf("Deduplicating %s..", source)

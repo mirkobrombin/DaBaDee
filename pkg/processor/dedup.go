@@ -31,19 +31,15 @@ type DedupProcessor struct {
 
 	// Workers is the number of workers to use
 	Workers int
-
-	// WithMetadata is a flag to enable metadata hashing
-	WithMetadata bool
 }
 
 // NewDedupProcessor creates a new DedupProcessor
-func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Generator, workers int, withMetadata bool) *DedupProcessor {
+func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Generator, workers int) *DedupProcessor {
 	return &DedupProcessor{
-		Source:       source,
-		Storage:      storage,
-		HashGen:      hashGen,
-		Workers:      workers,
-		WithMetadata: withMetadata,
+		Source:  source,
+		Storage: storage,
+		HashGen: hashGen,
+		Workers: workers,
 	}
 }
 
@@ -124,7 +120,7 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	// Compute file hash
 	var finalHash string
 
-	if p.WithMetadata {
+	if p.Storage.Opts.WithMetadata {
 		finalHash, err = p.HashGen.ComputeFullHash(path)
 		if err != nil {
 			return fmt.Errorf("computing full hash: %w", err)
