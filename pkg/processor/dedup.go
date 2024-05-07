@@ -31,6 +31,12 @@ type DedupProcessor struct {
 
 	// Workers is the number of workers to use
 	Workers int
+
+	// FileMap is a map of original file paths to their hash in storage
+	FileMap map[string]string
+
+	// mapMutex is a mutex to protect the FileMap from concurrent access
+	mapMutex sync.Mutex
 }
 
 // NewDedupProcessor creates a new DedupProcessor
@@ -40,6 +46,7 @@ func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Gen
 		Storage: storage,
 		HashGen: hashGen,
 		Workers: workers,
+		FileMap: make(map[string]string),
 	}
 }
 
@@ -163,6 +170,11 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 			return fmt.Errorf("removing source file: %w", err)
 		}
 	}
+
+	// Store the original path of the file
+	p.mapMutex.Lock()
+	p.FileMap[path] = finalHash
+	p.mapMutex.Unlock()
 
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		err = os.Link(dedupPath, path)
