@@ -47,6 +47,26 @@ of workers to use to speed up the process.
 
 > Do not delete the resulting storage folder, as it contains the original files.
 
+**Deduplicate a folder and obtain the pairings of origins and hashes in storage**
+
+```sh
+dabadee dedup /path/to/folder /path/to/storage 2 --manifest-output /path/to/manifest.json
+```
+
+This will create a JSON file with the pairings of the original files and their
+hashes in the storage, like this:
+
+```json
+{
+    "/path/to/folder/file1": "1234...",
+    "/path/to/folder/file2": "1234...",
+    ...
+}
+```
+
+the path must point to a file that does not exist, not a folder. The hash is
+the same as the one used in the storage, so the same algorithm will be used.
+
 **Deduplicate on copy**
 
 ```sh
