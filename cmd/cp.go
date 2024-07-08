@@ -12,24 +12,31 @@ import (
 
 func NewCpCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "cp [source] [dest] [storage]",
-		Short: "Copy a file or directory and deduplicate it in storage",
-		Args:  cobra.ExactArgs(3),
+		Use:   "cp [source] [dest]",
+		Short: "Copy a file and deduplicate it in storage",
+		Args:  cobra.ExactArgs(2),
 		Run:   cpCommand,
 	}
 
 	cmd.Flags().BoolP("with-metadata", "m", false, "Include file metadata in hash calculation")
 	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
-	cmd.Flags().BoolP("append", "a", false, "Append directory contents to destination (same as dedup -d)")
+	cmd.Flags().BoolP("append", "a", false, "Append directory contents to destination")
+	cmd.Flags().String("storage", "", "Storage directory for deduplicated files")
+	cmd.Flags().Int("workers", 1, "Number of workers to use")
 
 	return cmd
 }
 
 func cpCommand(cmd *cobra.Command, args []string) {
-	source, dest, storagePath := args[0], args[1], args[2]
+	source, dest := args[0], args[1]
+	storagePath, _ := cmd.Flags().GetString("storage")
+	if storagePath == "" {
+		storagePath = GetDefaultStoragePath()
+	}
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	appendFlag, _ := cmd.Flags().GetBool("append")
+	workers, _ := cmd.Flags().GetInt("workers")
 
 	// Create storage
 	storageOpts := storage.StorageOptions{
@@ -47,7 +54,7 @@ func cpCommand(cmd *cobra.Command, args []string) {
 	// Create processor based on the append flag
 	var proc processor.Processor
 	if appendFlag {
-		proc = processor.NewDedupProcessor(source, dest, s, h, 10)
+		proc = processor.NewDedupProcessor(source, dest, s, h, workers)
 	} else {
 		proc = processor.NewCpProcessor(source, dest, s, h)
 	}

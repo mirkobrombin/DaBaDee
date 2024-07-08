@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/mirkobrombin/dabadee/pkg/dabadee"
 	"github.com/mirkobrombin/dabadee/pkg/hash"
@@ -15,9 +14,9 @@ import (
 
 func NewDedupCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dedup [source] [storage] [workers]",
+		Use:   "dedup [source]",
 		Short: "Deduplicate files in a directory",
-		Args:  cobra.ExactArgs(3),
+		Args:  cobra.ExactArgs(1),
 		Run:   dedupCommand,
 	}
 
@@ -25,20 +24,23 @@ func NewDedupCommand() *cobra.Command {
 	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 	cmd.Flags().String("manifest-output", "", "Output manifest file to the given path")
 	cmd.Flags().String("dest", "", "Destination directory for copying deduplicated files")
+	cmd.Flags().String("storage", "", "Storage directory for deduplicated files")
+	cmd.Flags().Int("workers", 1, "Number of workers to use")
 
 	return cmd
 }
 
 func dedupCommand(cmd *cobra.Command, args []string) {
-	source, storagePath, workersStr := args[0], args[1], args[2]
+	source := args[0]
+	storagePath, _ := cmd.Flags().GetString("storage")
+	if storagePath == "" {
+		storagePath = GetDefaultStoragePath()
+	}
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	outputManifest, _ := cmd.Flags().GetString("manifest-output")
 	destDir, _ := cmd.Flags().GetString("dest")
-	workers, err := strconv.Atoi(workersStr)
-	if err != nil {
-		log.Fatalf("Invalid number of workers: %v", err)
-	}
+	workers, _ := cmd.Flags().GetInt("workers")
 
 	// Create storage
 	storageOpts := storage.StorageOptions{
