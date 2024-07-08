@@ -91,6 +91,16 @@ func dedupFinishProcessing(hash string) {
 
 // Process processes the files in the source directory
 func (p *DedupProcessor) Process(verbose bool) error {
+	if p.DestDir != "" {
+		if verbose {
+			log.Printf("Creating destination directory: %s", p.DestDir)
+		}
+		err := os.MkdirAll(p.DestDir, 0755)
+		if err != nil {
+			return fmt.Errorf("creating destination directory: %w", err)
+		}
+	}
+
 	jobs := make(chan string, p.Workers)
 	var wg sync.WaitGroup
 
