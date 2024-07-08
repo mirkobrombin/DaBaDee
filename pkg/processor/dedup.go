@@ -100,7 +100,7 @@ func (p *DedupProcessor) Process(verbose bool) error {
 		go func() {
 			defer wg.Done()
 			for path := range jobs {
-				err := p.processFile(path)
+				err := p.processFile(path, verbose)
 				if err != nil {
 					if verbose {
 						log.Printf("Error processing file %s: %v", path, err)
@@ -116,6 +116,9 @@ func (p *DedupProcessor) Process(verbose bool) error {
 			return err
 		}
 		if !info.IsDir() && path != p.Storage.Opts.Root {
+			if verbose {
+				log.Printf("Adding file to job queue: %s", path)
+			}
 			jobs <- path
 		}
 		return nil
@@ -129,16 +132,26 @@ func (p *DedupProcessor) Process(verbose bool) error {
 	return nil
 }
 
-func (p *DedupProcessor) processFile(path string) (err error) {
+func (p *DedupProcessor) processFile(path string, verbose bool) (err error) {
+	if verbose {
+		log.Printf("Processing file: %s", path)
+	}
+
 	// Compute file hash
 	var finalHash string
 
 	if p.Storage.Opts.WithMetadata {
+		if verbose {
+			log.Println("Computing full hash with metadata")
+		}
 		finalHash, err = p.HashGen.ComputeFullHash(path)
 		if err != nil {
 			return fmt.Errorf("computing full hash: %w", err)
 		}
 	} else {
+		if verbose {
+			log.Println("Computing content hash without metadata")
+		}
 		finalHash, err = p.HashGen.ComputeFileHash(path)
 		if err != nil {
 			return fmt.Errorf("computing content hash: %w", err)
@@ -148,6 +161,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	// Check if the file is already being processed
 	alreadyProcessing, waitChan := dedupStartProcessing(finalHash)
 	if alreadyProcessing {
+		if verbose {
+			log.Printf("File %s is already being processed, waiting...", path)
+		}
 		<-waitChan // Wait for the processing to finish
 	}
 
@@ -160,6 +176,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	}
 
 	if !exists {
+		if verbose {
+			log.Printf("File does not exist in storage, moving it: %s", dedupPath)
+		}
 		// If the file does not exist in storage, move it there
 		err = p.Storage.MoveFileToStorage(path, finalHash)
 		if err != nil {
@@ -167,6 +186,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 			return fmt.Errorf("moving file to storage: %w", err)
 		}
 	} else {
+		if verbose {
+			log.Printf("File already exists in storage: %s", dedupPath)
+		}
 		// If the file already exists in storage, remove the source file
 		err = os.Remove(path)
 		if err != nil {
@@ -181,6 +203,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	p.mapMutex.Unlock()
 
 	// Create a link at the original location
+	if verbose {
+		log.Printf("Creating link at original location: %s", path)
+	}
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		err = os.Link(dedupPath, path)
 		if err != nil {
@@ -198,6 +223,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 		}
 
 		destPath := filepath.Join(p.DestDir, relativePath)
+		if verbose {
+			log.Printf("Creating link at destination: %s", destPath)
+		}
 		if _, err := os.Lstat(destPath); os.IsNotExist(err) {
 			err = os.Link(dedupPath, destPath)
 			if err != nil {
@@ -208,5 +236,9 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	}
 
 	dedupFinishProcessing(finalHash)
+
+	if verbose {
+		log.Printf("Finished processing file: %s", path)
+	}
 	return nil
 }

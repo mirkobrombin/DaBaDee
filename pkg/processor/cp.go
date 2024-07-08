@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -38,15 +39,25 @@ func NewCpProcessor(sourceFile, destFile string, storage *storage.Storage, hashG
 
 // Process processes the file and creates a link at the destination
 func (p *CpProcessor) Process(verbose bool) (err error) {
+	if verbose {
+		log.Printf("Processing file: %s", p.SourceFile)
+	}
+
 	// Compute file hash
 	var finalHash string
 
 	if p.Storage.Opts.WithMetadata {
+		if verbose {
+			log.Println("Computing full hash with metadata")
+		}
 		finalHash, err = p.HashGen.ComputeFullHash(p.SourceFile)
 		if err != nil {
 			return fmt.Errorf("computing full hash: %w", err)
 		}
 	} else {
+		if verbose {
+			log.Println("Computing content hash without metadata")
+		}
 		finalHash, err = p.HashGen.ComputeFileHash(p.SourceFile)
 		if err != nil {
 			return fmt.Errorf("computing content hash: %w", err)
@@ -63,18 +74,32 @@ func (p *CpProcessor) Process(verbose bool) (err error) {
 
 	// If the file does not exist, move it to storage
 	if !exists {
+		if verbose {
+			log.Printf("File does not exist in storage, moving it: %s", dedupPath)
+		}
 		err = p.Storage.MoveFileToStorage(p.SourceFile, finalHash)
 		if err != nil {
 			return fmt.Errorf("moving file to storage: %w", err)
+		}
+	} else {
+		if verbose {
+			log.Printf("File already exists in storage: %s", dedupPath)
 		}
 	}
 
 	// Create a link at the destination pointing to the file in storage,
 	// removing the destination if it already exists
+	if verbose {
+		log.Printf("Creating link at destination: %s", p.DestFile)
+	}
 	os.Remove(p.DestFile)
 	err = os.Link(dedupPath, p.DestFile)
 	if err != nil {
 		return fmt.Errorf("linking file: %w", err)
+	}
+
+	if verbose {
+		log.Printf("Successfully linked file to destination: %s", p.DestFile)
 	}
 
 	return nil
