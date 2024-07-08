@@ -123,9 +123,23 @@ func (p *DedupProcessor) Process(verbose bool) error {
 	// Walk the source directory to enqueue jobs
 	err := filepath.Walk(p.Source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			if verbose {
+				log.Printf("Error accessing path %s: %v", path, err)
+			}
+			return filepath.SkipDir
 		}
+
 		if !info.IsDir() && path != p.Storage.Opts.Root {
+			// Check if we have permission to read the file
+			file, err := os.Open(path)
+			if err != nil {
+				if verbose {
+					log.Printf("Skipping file %s due to permissions: %v", path, err)
+				}
+				return nil
+			}
+			file.Close()
+
 			if verbose {
 				log.Printf("Adding file to job queue: %s", path)
 			}
