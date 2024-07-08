@@ -23,6 +23,9 @@ type DedupProcessor struct {
 	// Source is the path of the directory to deduplicate
 	Source string
 
+	// DestDir is the path of the directory to copy deduplicated files to
+	DestDir string
+
 	// Storage is the storage interface to use
 	Storage *storage.Storage
 
@@ -40,9 +43,10 @@ type DedupProcessor struct {
 }
 
 // NewDedupProcessor creates a new DedupProcessor
-func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Generator, workers int) *DedupProcessor {
+func NewDedupProcessor(source, destDir string, storage *storage.Storage, hashGen hash.Generator, workers int) *DedupProcessor {
 	return &DedupProcessor{
 		Source:  source,
+		DestDir: destDir,
 		Storage: storage,
 		HashGen: hashGen,
 		Workers: workers,
@@ -50,9 +54,9 @@ func NewDedupProcessor(source string, storage *storage.Storage, hashGen hash.Gen
 	}
 }
 
-// startProcessing marks the given hash as processing and returns a channel to
+// dedupStartProcessing marks the given hash as processing and returns a channel to
 // wait on if the hash is already being processed
-func startProcessing(hash string) (alreadyProcessing bool, waitChan chan struct{}) {
+func dedupStartProcessing(hash string) (alreadyProcessing bool, waitChan chan struct{}) {
 	globalLock.Lock()
 	defer globalLock.Unlock()
 
@@ -72,9 +76,9 @@ func startProcessing(hash string) (alreadyProcessing bool, waitChan chan struct{
 	return false, nil
 }
 
-// finishProcessing marks the given hash as no longer processing and closes the
+// dedupFinishProcessing marks the given hash as no longer processing and closes the
 // channel to signal that the processing has finished
-func finishProcessing(hash string) {
+func dedupFinishProcessing(hash string) {
 	globalLock.Lock()
 	defer globalLock.Unlock()
 
@@ -142,7 +146,7 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	}
 
 	// Check if the file is already being processed
-	alreadyProcessing, waitChan := startProcessing(finalHash)
+	alreadyProcessing, waitChan := dedupStartProcessing(finalHash)
 	if alreadyProcessing {
 		<-waitChan // Wait for the processing to finish
 	}
@@ -151,7 +155,7 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	dedupPath := filepath.Join(p.Storage.Opts.Root, finalHash)
 	exists, err := p.Storage.FileExists(dedupPath)
 	if err != nil {
-		finishProcessing(finalHash)
+		dedupFinishProcessing(finalHash)
 		return fmt.Errorf("checking file existence in storage: %w", err)
 	}
 
@@ -159,14 +163,14 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 		// If the file does not exist in storage, move it there
 		err = p.Storage.MoveFileToStorage(path, finalHash)
 		if err != nil {
-			finishProcessing(finalHash)
+			dedupFinishProcessing(finalHash)
 			return fmt.Errorf("moving file to storage: %w", err)
 		}
 	} else {
 		// If the file already exists in storage, remove the source file
 		err = os.Remove(path)
 		if err != nil {
-			finishProcessing(finalHash)
+			dedupFinishProcessing(finalHash)
 			return fmt.Errorf("removing source file: %w", err)
 		}
 	}
@@ -176,14 +180,33 @@ func (p *DedupProcessor) processFile(path string) (err error) {
 	p.FileMap[path] = finalHash
 	p.mapMutex.Unlock()
 
+	// Create a link at the original location
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		err = os.Link(dedupPath, path)
 		if err != nil {
-			finishProcessing(finalHash)
+			dedupFinishProcessing(finalHash)
 			return fmt.Errorf("creating link to deduplicated file: %w", err)
 		}
 	}
 
-	finishProcessing(finalHash)
+	// Create a link at the destination if DestDir is set
+	if p.DestDir != "" {
+		relativePath, err := filepath.Rel(p.Source, path)
+		if err != nil {
+			dedupFinishProcessing(finalHash)
+			return fmt.Errorf("getting relative path: %w", err)
+		}
+
+		destPath := filepath.Join(p.DestDir, relativePath)
+		if _, err := os.Lstat(destPath); os.IsNotExist(err) {
+			err = os.Link(dedupPath, destPath)
+			if err != nil {
+				dedupFinishProcessing(finalHash)
+				return fmt.Errorf("creating link to deduplicated file in destination: %w", err)
+			}
+		}
+	}
+
+	dedupFinishProcessing(finalHash)
 	return nil
 }

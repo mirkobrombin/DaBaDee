@@ -24,6 +24,7 @@ func NewDedupCommand() *cobra.Command {
 	cmd.Flags().BoolP("with-metadata", "m", false, "Include file metadata in hash calculation")
 	cmd.Flags().BoolP("verbose", "v", false, "Verbose output")
 	cmd.Flags().String("manifest-output", "", "Output manifest file to the given path")
+	cmd.Flags().String("dest", "", "Destination directory for copying deduplicated files")
 
 	return cmd
 }
@@ -33,6 +34,7 @@ func dedupCommand(cmd *cobra.Command, args []string) {
 	withMetadata, _ := cmd.Flags().GetBool("with-metadata")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	outputManifest, _ := cmd.Flags().GetString("manifest-output")
+	destDir, _ := cmd.Flags().GetString("dest")
 	workers, err := strconv.Atoi(workersStr)
 	if err != nil {
 		log.Fatalf("Invalid number of workers: %v", err)
@@ -52,7 +54,7 @@ func dedupCommand(cmd *cobra.Command, args []string) {
 	h := hash.NewSHA256Generator()
 
 	// Create processor
-	processor := processor.NewDedupProcessor(source, s, h, workers)
+	processor := processor.NewDedupProcessor(source, destDir, s, h, workers)
 
 	// Run the processor
 	log.Printf("Deduplicating %s..", source)
