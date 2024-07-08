@@ -38,7 +38,7 @@ Use "dabadee [command] --help" for more information about a command.
 **Deduplicate a folder**
 
 ```sh
-dabadee dedup /path/to/folder /path/to/storage 2
+dabadee dedup /path/to/folder --storage /path/to/storage --workers 2
 ```
 
 Where the `/path/to/folder` is the folder to deduplicate and `/path/to/storage`
@@ -50,7 +50,7 @@ of workers to use to speed up the process.
 **Deduplicate a folder and obtain the pairings of origins and hashes in storage**
 
 ```sh
-dabadee dedup /path/to/folder /path/to/storage 2 --manifest-output /path/to/manifest.json
+dabadee dedup /path/to/folder --storage /path/to/storage --workers 2 --manifest-output /path/to/manifest.json
 ```
 
 This will create a JSON file with the pairings of the original files and their
@@ -70,21 +70,49 @@ the same as the one used in the storage, so the same algorithm will be used.
 **Deduplicate on copy**
 
 ```sh
-dabadee cp /path/to/file /path/to/dest/file /path/to/storage
+dabadee cp /path/to/file /path/to/dest/file --storage /path/to/storage
 ```
 
 This will copy the file to the destination and deduplicate it in the storage if
 not already present.
 
+**Deduplicate a folder on copy**
+
+```sh
+dabadee cp --append /path/to/folder /path/to/dest --storage /path/to/storage --workers 2
+```
+
+This will copy the folder to the destination and deduplicate it in the storage
+if not already present. The `--append` flag indicates to copy the folder
+contents inside the destination folder.
+
 **Keep metadata**
 
 ```sh
-dabadee dedup /path/to/folder /path/to/storage 2 --with-metadata
-dabadee cp /path/to/file /path/to/dest/file /path/to/storage --with-metadata
+dabadee dedup /path/to/folder --storage /path/to/storage --workers 2 --with-metadata
+dabadee cp /path/to/file /path/to/dest/file --storage /path/to/storage --with-metadata
 ```
 
 This will keep the original file metadata (uid, gid, permissions) when copying
 the file to the storage.
+
+**Global Storage vs Scoped Storage**
+
+When using the CLI, the storage can be defined globally or scoped. The scoped
+storage is defined with the `--storage` flag, this allows you to define a new
+storage each time you run a command. The global storage is assumed to be in the
+user's home directory, in the `.dabadee/Storage` folder if Dabadee is run as
+user, or in the `/opt/dabadee/Storage` folder if Dabadee is run as root.
+
+```sh
+# This will use the global storage:
+dabadee dedup /path/to/folder --workers 2
+
+# This will use the scoped storage:
+dabadee dedup /path/to/folder --workers 2 --storage /path/to/storage
+```
+
+This behavior is currently supported by the `cp` and `dedup` commands only.
 
 ### Library
 
@@ -100,11 +128,11 @@ import (
 
 func main() {
     s := storage.NewStorage(storage.StorageOptions{
-      Root: "/path/to/storage",
-      WithMetadata: true,
+        Root: "/path/to/storage",
+        WithMetadata: true,
     })
     h := hash.NewSHA256Generator()
-    p := processor.NewDedupProcessor("/path/to/folder", s, h, 2)
+    p := processor.NewDedupProcessor("/path/to/folder", "/path/to/dest", s, h, 2)
 
     d := dabadee.NewDaBaDee(p)
     err := d.Run()
@@ -113,6 +141,10 @@ func main() {
     }
 }
 ```
+
+If the destination folder does not exist, it will be created, if it is not defined
+(empty string), no files will be copied, and only the original files will be
+deduplicated.
 
 Please note that DaBaDee is not atomic, so if the process is interrupted, the
 storage may be left in an inconsistent state. It is recommended to use a
@@ -128,10 +160,10 @@ was listening to when I started the project. So... I'm blue, da ba dee da ba daa
 ## What is left to do?
 
 - [x] Add tests
-- [ ] Add a progress bar
 - [x] Provide better logs and ask user input when needed
-- [ ] Make access to storage more robust, with a lock file
 - [x] Add a way to remove files from the storage reflecting the changes in the
       original files
 - [x] Provide an option to respect metadata (uid, gid, permissions)
 - [x] Split cmd and lib in two different packages
+- [x] Add a way deduplicate files and folders on copy
+- [x] Add a global storage configuration if the storage is not provided
