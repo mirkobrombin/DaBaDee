@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
+	"time"
 
+	"github.com/mirkobrombin/dabadee/pkg/cache"
 	"github.com/mirkobrombin/dabadee/pkg/hash"
 	"github.com/mirkobrombin/dabadee/pkg/storage"
 )
@@ -40,10 +43,25 @@ type DedupProcessor struct {
 
 	// mapMutex is a mutex to protect the FileMap from concurrent access
 	mapMutex sync.Mutex
+
+	// Cache holds information about previously processed files
+	Cache *cache.Cache
+
+	// Stats holds statistics about the current run
+	Stats DedupStats
+}
+
+// DedupStats collects information about the deduplication process
+type DedupStats struct {
+	Processed int
+	Skipped   int
+	Duration  time.Duration
 }
 
 // NewDedupProcessor creates a new DedupProcessor
 func NewDedupProcessor(source, destDir string, storage *storage.Storage, hashGen hash.Generator, workers int) *DedupProcessor {
+	cachePath := filepath.Join(storage.Opts.Root, ".dedup_cache")
+	c, _ := cache.Load(cachePath)
 	return &DedupProcessor{
 		Source:  source,
 		DestDir: destDir,
@@ -51,6 +69,7 @@ func NewDedupProcessor(source, destDir string, storage *storage.Storage, hashGen
 		HashGen: hashGen,
 		Workers: workers,
 		FileMap: make(map[string]string),
+		Cache:   c,
 	}
 }
 
@@ -91,6 +110,14 @@ func dedupFinishProcessing(hash string) {
 
 // Process processes the files in the source directory
 func (p *DedupProcessor) Process(verbose bool) error {
+	lockFile, err := p.Storage.AcquireLock()
+	if err != nil {
+		return err
+	}
+	defer p.Storage.ReleaseLock(lockFile)
+
+	start := time.Now()
+
 	if p.DestDir != "" {
 		if verbose {
 			log.Printf("Creating destination directory: %s", p.DestDir)
@@ -121,7 +148,7 @@ func (p *DedupProcessor) Process(verbose bool) error {
 	}
 
 	// Walk the source directory to enqueue jobs
-	err := filepath.Walk(p.Source, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(p.Source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if verbose {
 				log.Printf("Error accessing path %s: %v", path, err)
@@ -152,13 +179,48 @@ func (p *DedupProcessor) Process(verbose bool) error {
 	}
 	close(jobs)
 	wg.Wait()
-
+	p.Stats.Duration = time.Since(start)
+	if verbose {
+		log.Printf("Processed: %d, Skipped: %d, Duration: %s", p.Stats.Processed, p.Stats.Skipped, p.Stats.Duration)
+	}
+	if p.Cache != nil {
+		if err := p.Cache.Save(); err != nil && verbose {
+			log.Printf("Error saving cache: %v", err)
+		}
+	}
 	return nil
 }
 
 func (p *DedupProcessor) processFile(path string, verbose bool) (err error) {
 	if verbose {
 		log.Printf("Processing file: %s", path)
+	}
+
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+
+	// Check cache for unchanged files
+	if entry, ok := p.Cache.Get(path); ok {
+		if entry.ModTime == info.ModTime().Unix() && entry.Size == info.Size() {
+			dedupPath := filepath.Join(p.Storage.Opts.Root, entry.Hash)
+			storedInfo, sErr := os.Lstat(dedupPath)
+			if sErr == nil {
+				if statOrig, ok1 := info.Sys().(*syscall.Stat_t); ok1 {
+					if statStored, ok2 := storedInfo.Sys().(*syscall.Stat_t); ok2 && statOrig.Ino == statStored.Ino {
+						if verbose {
+							log.Printf("Skipping unchanged file: %s", path)
+						}
+						p.mapMutex.Lock()
+						p.FileMap[path] = entry.Hash
+						p.mapMutex.Unlock()
+						p.Stats.Skipped++
+						return nil
+					}
+				}
+			}
+		}
 	}
 
 	// Compute file hash
@@ -260,6 +322,15 @@ func (p *DedupProcessor) processFile(path string, verbose bool) (err error) {
 	}
 
 	dedupFinishProcessing(finalHash)
+
+	if p.Cache != nil {
+		p.Cache.Update(path, cache.CacheEntry{
+			ModTime: info.ModTime().Unix(),
+			Size:    info.Size(),
+			Hash:    finalHash,
+		})
+	}
+	p.Stats.Processed++
 
 	if verbose {
 		log.Printf("Finished processing file: %s", path)

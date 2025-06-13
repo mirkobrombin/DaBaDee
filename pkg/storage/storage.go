@@ -380,10 +380,35 @@ func (s *Storage) ListFiles() ([]os.DirEntry, error) {
 
 	var files []os.DirEntry
 	for _, file := range dir {
-		if file.Name() != ".dabadee" {
+		if file.Name() != ".dabadee" && file.Name() != ".dedup_cache" && file.Name() != ".lock" {
 			files = append(files, file)
 		}
 	}
 
 	return files, nil
+}
+
+// AcquireLock obtains an exclusive lock on the storage to avoid concurrent modifications.
+func (s *Storage) AcquireLock() (*os.File, error) {
+	lockPath := filepath.Join(s.Opts.Root, ".lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, err
+	}
+	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+// ReleaseLock releases the previously acquired lock.
+func (s *Storage) ReleaseLock(f *os.File) error {
+	if f == nil {
+		return nil
+	}
+	err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	f.Close()
+	return err
 }
