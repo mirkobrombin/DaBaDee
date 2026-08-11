@@ -3,6 +3,7 @@ package cache
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
 type CacheEntry struct {
@@ -36,14 +37,25 @@ func (c *Cache) Save() error {
 	if c == nil {
 		return nil
 	}
-	f, err := os.Create(c.Path)
+	if err := os.MkdirAll(filepath.Dir(c.Path), 0755); err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(c.Path), ".dedup_cache.partial-")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	temporaryPath := f.Name()
+	defer os.Remove(temporaryPath)
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	return enc.Encode(c.Entries)
+	if err := enc.Encode(c.Entries); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, c.Path)
 }
 
 func (c *Cache) Get(path string) (CacheEntry, bool) {
