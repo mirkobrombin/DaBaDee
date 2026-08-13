@@ -393,7 +393,7 @@ func (s *Store) collectGarbage(ctx context.Context, apply bool, released map[fil
 			return result, fmt.Errorf("store: stat object: %w", statErr)
 		}
 		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat.Nlink > 1+released[fileIdentity{device: stat.Dev, inode: stat.Ino}] {
+		if !ok || uint64(stat.Nlink) > 1+released[fileIdentity{device: stat.Dev, inode: stat.Ino}] {
 			continue
 		}
 		removed[entry.Name()] = true
