@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mirkobrombin/dabadee/pkg/hash"
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+	"github.com/mirkobrombin/dabadee/v2/pkg/hash"
+	"github.com/mirkobrombin/dabadee/v2/pkg/storage"
 )
 
 // CpProcessor is a processor that links a stored file to a destination. If the

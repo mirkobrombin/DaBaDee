@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mirkobrombin/dabadee/pkg/dabadee"
-	"github.com/mirkobrombin/dabadee/pkg/hash"
-	"github.com/mirkobrombin/dabadee/pkg/processor"
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+	"github.com/mirkobrombin/dabadee/v2/pkg/dabadee"
+	"github.com/mirkobrombin/dabadee/v2/pkg/hash"
+	"github.com/mirkobrombin/dabadee/v2/pkg/processor"
+	"github.com/mirkobrombin/dabadee/v2/pkg/storage"
 	"github.com/stretchr/testify/assert"
 )
 

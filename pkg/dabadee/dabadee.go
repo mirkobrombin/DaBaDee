@@ -1,6 +1,6 @@
 package dabadee
 
-import "github.com/mirkobrombin/dabadee/pkg/processor"
+import "github.com/mirkobrombin/dabadee/v2/pkg/processor"
 
 type DaBaDee struct {
 	Processor processor.Processor

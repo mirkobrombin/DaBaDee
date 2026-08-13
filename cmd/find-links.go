@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+	"github.com/mirkobrombin/dabadee/v2/pkg/storage"
 	"github.com/spf13/cobra"
 )
 

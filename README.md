@@ -1,169 +1,82 @@
 <div align="center">
     <img src="logo.png" alt="DaBaDee" width="450"/>
-    <p>DaBaDee is a simple deduplication tool/storage for files. It uses SHA256* to
-hash the files and store them in the storage, replacing the original path with
-a hardlink to the storage location.</p>
-    <sub>* SHA256 is the default hashing algorithm, but it can be replaced with
-    any other hashing algorithm that implements the `hash.Generator` interface.
-    The highwayhash algorithm is also provided as an example.</sub>
+    <p>DaBaDee is a content-addressed file store with whole-file and chunk deduplication.</p>
 </div>
 
-## Usage
+DaBaDee stores one object for identical files and replaces destinations with hardlinks. Version 2 can also reuse unchanged ranges between similar files on filesystems that support reflink range cloning. The store remains useful as a standalone Go library and does not depend on cpak.
 
-### CLI
-
-**Show help**
+## Install
 
 ```sh
-dabadee --help
-
-Usage:
-  dabadee [command]
-
-Available Commands:
-  completion     Generate the autocompletion script for the specified shell
-  cp             Copy a file and deduplicate it in storage
-  dedup          Deduplicate files in a directory
-  find-links     Find all hard links to the specified file
-  help           Help about any command
-  remove-orphans Remove all orphaned files from the storage
-  rm             Remove a file and its link from storage
-
-Flags:
-  -h, --help   help for dabadee
-
-Use "dabadee [command] --help" for more information about a command.
+go get github.com/mirkobrombin/dabadee/v2
 ```
 
-**Deduplicate a folder**
+The `v2` suffix is required by Go modules. Version 1 remains available at `github.com/mirkobrombin/dabadee`.
 
-```sh
-dabadee dedup /path/to/folder --storage /path/to/storage --workers 2
-```
-
-Where the `/path/to/folder` is the folder to deduplicate and `/path/to/storage`
-is the location you want to store the deduplicated files. The `2` is the number
-of workers to use to speed up the process.
-
-> Do not delete the resulting storage folder, as it contains the original files.
-
-**Deduplicate a folder and obtain the pairings of origins and hashes in storage**
-
-```sh
-dabadee dedup /path/to/folder --storage /path/to/storage --workers 2 --manifest-output /path/to/manifest.json
-```
-
-This will create a JSON file with the pairings of the original files and their
-hashes in the storage, like this:
-
-```json
-{
-    "/path/to/folder/file1": "1234...",
-    "/path/to/folder/file2": "1234...",
-    ...
-}
-```
-
-the path must point to a file that does not exist, not a folder. The hash is
-the same as the one used in the storage, so the same algorithm will be used.
-
-**Deduplicate on copy**
-
-```sh
-dabadee cp /path/to/file /path/to/dest/file --storage /path/to/storage
-```
-
-This will copy the file to the destination and deduplicate it in the storage if
-not already present.
-
-**Deduplicate a folder on copy**
-
-```sh
-dabadee cp --append /path/to/folder /path/to/dest --storage /path/to/storage --workers 2
-```
-
-This will copy the folder to the destination and deduplicate it in the storage
-if not already present. The `--append` flag indicates to copy the folder
-contents inside the destination folder.
-
-**Keep metadata**
-
-```sh
-dabadee dedup /path/to/folder --storage /path/to/storage --workers 2 --with-metadata
-dabadee cp /path/to/file /path/to/dest/file --storage /path/to/storage --with-metadata
-```
-
-This will keep the original file metadata (uid, gid, permissions) when copying
-the file to the storage.
-
-**Global Storage vs Scoped Storage**
-
-When using the CLI, the storage can be defined globally or scoped. The scoped
-storage is defined with the `--storage` flag, this allows you to define a new
-storage each time you run a command. The global storage is assumed to be in the
-user's home directory, in the `.dabadee/Storage` folder if Dabadee is run as
-user, or in the `/opt/dabadee/Storage` folder if Dabadee is run as root.
-
-```sh
-# This will use the global storage:
-dabadee dedup /path/to/folder --workers 2
-
-# This will use the scoped storage:
-dabadee dedup /path/to/folder --workers 2 --storage /path/to/storage
-```
-
-This behavior is currently supported by the `cp` and `dedup` commands only.
-
-### Library
+## Library
 
 ```go
 package main
 
 import (
-    "github.com/mirkobrombin/dabadee/pkg/dabadee"
-    "github.com/mirkobrombin/dabadee/pkg/hash"
-    "github.com/mirkobrombin/dabadee/pkg/processor"
-    "github.com/mirkobrombin/dabadee/pkg/storage"
+    "bytes"
+    "context"
+    "log"
+
+    "github.com/mirkobrombin/dabadee/v2/pkg/store"
 )
 
 func main() {
-    s := storage.NewStorage(storage.StorageOptions{
-        Root: "/path/to/storage",
-        WithMetadata: true,
+    storage, err := store.Open(store.Options{
+        Root:             "/path/to/storage",
+        PreserveMetadata: true,
     })
-    h := hash.NewSHA256Generator()
-    p := processor.NewDedupProcessor("/path/to/folder", "/path/to/dest", s, h, 2)
-
-    d := dabadee.NewDaBaDee(p)
-    err := d.Run()
     if err != nil {
-        panic(err)
+        log.Fatal(err)
+    }
+    defer storage.Close()
+
+    _, err = storage.Import(
+        context.Background(),
+        "/path/to/destination",
+        bytes.NewReader([]byte("content")),
+        store.ImportOptions{},
+    )
+    if err != nil {
+        log.Fatal(err)
     }
 }
 ```
 
-If the destination folder does not exist, it will be created, if it is not defined
-(empty string), no files will be copied, and only the original files will be
-deduplicated.
+`Import` accepts an `io.Reader`, so callers can hash, decompress and store data without first writing another complete copy to disk. `ImportFile` imports an existing file and `DeduplicateTree` replaces regular files in a directory in place. `Contains` checks whether a known digest is reusable without creating a destination, while `Reuse` links it without asking the caller to supply its bytes again.
 
-Please note that DaBaDee is not atomic, so if the process is interrupted, the
-storage may be left in an inconsistent state. It is recommended to use a
-transictional folder instead of working with the original files directly, and
-then swap the folders when the process is done.
+Call `GC` after deleting destinations. An object is removed only when no hardlink outside the store still references it. `CollectGarbage(ctx, false)` reports current garbage without changing the store. `PlanGC` can also include paths that the caller intends to remove. `Close` writes the index atomically and releases the process lock.
 
-## What's with the name?
+## Deduplication
 
-The name comes from the song ["Blue (Da Ba Dee)" by Eiffel 65](https://www.youtube.com/watch?v=68ugkg9RePc).
-There is no connection between the song and the project, it's just the song I
-was listening to when I started the project. So... I'm blue, da ba dee da ba daa.
+Every imported file gets a SHA-256 content digest. When metadata preservation is enabled, its mode, UID and GID are part of the object key. Equal objects share one inode through hardlinks.
 
-## What is left to do?
+The input is also split at content-defined, 4 KiB-aligned boundaries. On a filesystem with reflink range support, unchanged chunks are cloned into the new object and share physical extents. A modified file can therefore reuse most of an existing object without storing a second full copy.
 
-- [x] Add tests
-- [x] Provide better logs and ask user input when needed
-- [x] Add a way to remove files from the storage reflecting the changes in the
-      original files
-- [x] Provide an option to respect metadata (uid, gid, permissions)
-- [x] Split cmd and lib in two different packages
-- [x] Add a way deduplicate files and folders on copy
-- [x] Add a global storage configuration if the storage is not provided
+DaBaDee probes this capability when the store opens. Filesystems without reflink support keep whole-file deduplication and write similar files normally. It does not keep a separate chunk payload store, because that would duplicate data on filesystems that cannot share extents.
+
+```go
+capabilities := storage.Capabilities()
+if capabilities.Reflink {
+    // Similar files can reuse physical extents.
+}
+```
+
+## Recovery
+
+Imports are written in the v2 staging directory and published only after the content and metadata are complete. A later `Open` removes staging files left by an interrupted process. The object index is replaced atomically after its new contents have reached disk.
+
+See [Migration from v1](docs/migration-v2.md) before changing an existing integration.
+
+## CLI
+
+The existing `cp`, `dedup`, `find-links`, `rm` and `rm-orphans` commands remain available for v1 stores. This keeps scripts and existing storage layouts working while applications move to the v2 library API. New integrations should use `pkg/store`.
+
+## Name
+
+The name comes from [Blue (Da Ba Dee) by Eiffel 65](https://www.youtube.com/watch?v=68ugkg9RePc). It was the song playing when the project started.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mirkobrombin/dabadee/cmd"
+	"github.com/mirkobrombin/dabadee/v2/cmd"
 	"github.com/spf13/cobra"
 )
 

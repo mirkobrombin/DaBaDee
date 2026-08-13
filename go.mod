@@ -1,4 +1,4 @@
-module github.com/mirkobrombin/dabadee
+module github.com/mirkobrombin/dabadee/v2
 
 go 1.20
 

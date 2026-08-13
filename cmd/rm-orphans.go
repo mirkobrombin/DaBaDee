@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+	"github.com/mirkobrombin/dabadee/v2/pkg/storage"
 	"github.com/spf13/cobra"
 )
 

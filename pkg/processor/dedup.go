@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mirkobrombin/dabadee/pkg/cache"
-	"github.com/mirkobrombin/dabadee/pkg/hash"
-	"github.com/mirkobrombin/dabadee/pkg/storage"
+	"github.com/mirkobrombin/dabadee/v2/pkg/cache"
+	"github.com/mirkobrombin/dabadee/v2/pkg/hash"
+	"github.com/mirkobrombin/dabadee/v2/pkg/storage"
 )
 
 var (
